@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test Client</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; background: #f9f9f9; }
+        .controls { display: grid; gap: 10px; max-width: 500px; }
+        input, button { padding: 8px; }
+        .system { color: #888; font-style: italic; }
+        .received { color: blue; }
+        .sent { color: green; }
+    </style>
+</head>
+<body>
+    <h2>Real-Time Chat WebSocket Test</h2>
+    <div id="messages"></div>
+    
+    <div class="controls">
+        <input type="text" id="token" placeholder="JWT Token (without 'Bearer ')" />
+        <input type="text" id="convId" placeholder="Conversation UUID" />
+        <button onclick="connect()">1. Connect & Subscribe</button>
+        <hr>
+        <input type="text" id="message" placeholder="Type a message..." />
+        <button onclick="sendMessage()">2. Send Message</button>
+    </div>
+
+    <script>
+        var stompClient = null;
+
+        function log(msg, className) {
+            const div = document.createElement('div');
+            div.className = className || '';
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            const container = document.getElementById('messages');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function connect() {
+            const token = document.getElementById('token').value;
+            const convId = document.getElementById('convId').value;
+
+            if (!token || !convId) {
+                alert("Please provide both Token and Conversation ID");
+                return;
+            }
+
+            log("Attempting to connect...", "system");
+            
+            // Use SockJS for fallback support
+            const socket = new SockJS('http://localhost:8080/ws');
+            stompClient = Stomp.over(socket);
+
+            const headers = {
+                'Authorization': 'Bearer ' + token
+            };
+
+            stompClient.connect(headers, function (frame) {
+                log("Connected: " + frame, "system");
+                
+                const topic = '/topic/conversation.' + convId;
+                log("Subscribing to " + topic, "system");
+                
+                stompClient.subscribe(topic, function (response) {
+                    const msg = JSON.parse(response.body);
+                    log(`Received from ${msg.senderId}: ${msg.content}`, "received");
+                });
+            }, function (error) {
+                log("Error: " + error, "system");
+            });
+        }
+
+        function sendMessage() {
+            const convId = document.getElementById('convId').value;
+            const content = document.getElementById('message').value;
+
+            if (!stompClient || !stompClient.connected) {
+                alert("Not connected!");
+                return;
+            }
+
+            const payload = {
+                conversationId: convId,
+                content: content
+            };
+
+            log(`Sending: ${content}`, "sent");
+            stompClient.send("/app/chat.send", {}, JSON.stringify(payload));
+            document.getElementById('message').value = '';
+        }
+    </script>
+</body>
+</html>

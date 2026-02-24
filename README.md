@@ -72,11 +72,11 @@ Manage direct conversations between users.
 
 ---
 
-## ✉️ Message Module (Phase 4)
+## ✉️ Message Module (Phase 4 & 5)
 
-Reliable message persistence with cursor-based pagination.
+Reliable message persistence and **Real-Time Delivery via WebSockets**.
 
-### 1. Send Message
+### 1. Send Message (REST)
 `POST /api/messages`
 - **Auth Required**: Yes
 - **Body**:
@@ -88,13 +88,17 @@ Reliable message persistence with cursor-based pagination.
 ```
 
 ### 2. Fetch Messages (Pagination)
-`GET /api/messages?conversationId=xxx&before=2024-02-24T08:00:00Z&limit=20`
+`GET /api/messages?conversationId=xxx&before=timestamp&limit=20`
 - **Auth Required**: Yes
-- **Query Params**:
-  - `conversationId`: UUID of the conversation.
-  - `before`: (Optional) ISO-8601 timestamp. Returns messages created *before* this time.
-  - `limit`: (Optional, default 20) Number of messages to return.
-- **Why Cursor-based?**: Fast and reliable for infinite scroll, avoiding duplicate messages when new ones arrive.
+
+### 3. Real-Time WebSocket (Phase 5)
+- **Endpoint**: `/ws` (supports SockJS fallback)
+- **Handshake Auth**: Required. Pass JWT in `Authorization` header during STOMP `CONNECT`.
+- **Subscribe to Conversation**:
+  - `SUBSCRIBE /topic/conversation.{conversationId}`
+- **Send Message via WebSocket**:
+  - `SEND /app/chat.send`
+  - Body: `{ "conversationId": "...", "content": "..." }`
 
 ---
 
