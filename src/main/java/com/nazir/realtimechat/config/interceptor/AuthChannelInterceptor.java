@@ -2,6 +2,7 @@ package com.nazir.realtimechat.config.interceptor;
 
 import com.nazir.realtimechat.common.constants.SecurityConstants;
 import com.nazir.realtimechat.common.util.JwtUtil;
+import com.nazir.realtimechat.presence.service.PresenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -23,6 +24,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
+    private final PresenceService presenceService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -43,6 +45,9 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                     
                     accessor.setUser(authentication);
                     log.info("WebSocket connection authenticated for user: {}", username);
+                    
+                    // Mark user as online
+                    presenceService.markOnline(username);
                 } else {
                     log.error("Invalid JWT token for WebSocket connection");
                     throw new IllegalArgumentException("Invalid token");
@@ -52,6 +57,20 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                 throw new IllegalArgumentException("Missing token");
             }
         }
+
         return message;
+    }
+
+    @Override
+    public void postSend(Message<?> message, MessageChannel channel, boolean sent) {
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        
+        if (accessor != null && StompCommand.DISCONNECT.equals(accessor.getCommand())) {
+            if (accessor.getUser() != null) {
+                String username = accessor.getUser().getName();
+                log.info("WebSocket DISCONNECT detected for user: {}", username);
+                presenceService.markOffline(username);
+            }
+        }
     }
 }
