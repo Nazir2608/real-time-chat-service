@@ -68,7 +68,33 @@ Manage direct conversations between users.
 ### 2. List User Conversations
 `GET /api/conversations`
 - **Auth Required**: Yes
-- **Returns**: A list of all conversations the authenticated user is part of, including the other participant's details.
+- **Returns**: A list of all conversations the authenticated user is part of.
+
+---
+
+## ✉️ Message Module (Phase 4)
+
+Reliable message persistence with cursor-based pagination.
+
+### 1. Send Message
+`POST /api/messages`
+- **Auth Required**: Yes
+- **Body**:
+```json
+{
+  "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+  "content": "Hello, how are you?"
+}
+```
+
+### 2. Fetch Messages (Pagination)
+`GET /api/messages?conversationId=xxx&before=2024-02-24T08:00:00Z&limit=20`
+- **Auth Required**: Yes
+- **Query Params**:
+  - `conversationId`: UUID of the conversation.
+  - `before`: (Optional) ISO-8601 timestamp. Returns messages created *before* this time.
+  - `limit`: (Optional, default 20) Number of messages to return.
+- **Why Cursor-based?**: Fast and reliable for infinite scroll, avoiding duplicate messages when new ones arrive.
 
 ---
 
