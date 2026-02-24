@@ -2,6 +2,7 @@ package com.nazir.realtimechat.message.controller.ws;
 
 import com.nazir.realtimechat.message.dto.MessageRequest;
 import com.nazir.realtimechat.message.dto.MessageResponse;
+import com.nazir.realtimechat.message.dto.TypingRequest;
 import com.nazir.realtimechat.message.service.MessageService;
 import com.nazir.realtimechat.user.entity.User;
 import com.nazir.realtimechat.user.repository.UserRepository;
@@ -74,6 +75,26 @@ public class ChatWebSocketController {
         }
     }
 
+    /**
+     * Handles typing indicators.
+     * Destination: /app/chat.typing
+     */
+    @MessageMapping("/chat.typing")
+    public void handleTyping(Principal principal, @Payload TypingRequest request) {
+        log.info("Typing event received from {} for conversation {}: {}", 
+                principal.getName(), request.getConversationId(), request.isTyping());
+        
+        try {
+            User currentUser = userRepository.findByUsername(principal.getName()).orElseThrow(() -> new RuntimeException("User not found"));
+            
+            String topic = "/topic/conversation." + request.getConversationId();
+            messagingTemplate.convertAndSend(topic, new TypingEvent(request.getConversationId(), currentUser.getId(), request.isTyping()));
+            
+        } catch (Exception e) {
+            log.error("Failed to process typing event: {}", e.getMessage());
+        }
+    }
+
     @lombok.Data
     public static class ReadReceipt {
         private UUID conversationId;
@@ -83,6 +104,20 @@ public class ChatWebSocketController {
         public ReadReceipt(UUID conversationId, UUID readerId) {
             this.conversationId = conversationId;
             this.readerId = readerId;
+        }
+    }
+
+    @lombok.Data
+    public static class TypingEvent {
+        private UUID conversationId;
+        private UUID userId;
+        private boolean isTyping;
+        private String type = "TYPING";
+
+        public TypingEvent(UUID conversationId, UUID userId, boolean isTyping) {
+            this.conversationId = conversationId;
+            this.userId = userId;
+            this.isTyping = isTyping;
         }
     }
 }

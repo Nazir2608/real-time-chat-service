@@ -17,19 +17,25 @@
 <body>
     <h2>Real-Time Chat WebSocket Test</h2>
     <div id="messages"></div>
+    <div id="typing-indicator" style="height: 20px; font-size: 12px; color: #666; margin-bottom: 10px;"></div>
     
     <div class="controls">
         <input type="text" id="token" placeholder="JWT Token (without 'Bearer ')" />
         <input type="text" id="convId" placeholder="Conversation UUID" />
         <button onclick="connect()">1. Connect & Subscribe</button>
         <hr>
-        <input type="text" id="message" placeholder="Type a message..." />
+        <input type="text" id="targetUsername" placeholder="Target Username (for presence)" />
+        <button onclick="checkPresence()" style="background: #f1f8e9;">Check Presence</button>
+        <hr>
+        <input type="text" id="message" placeholder="Type a message..." oninput="handleTyping()" />
         <button onclick="sendMessage()">2. Send Message</button>
         <button onclick="sendReadReceipt()" style="background: #e1f5fe;">3. Mark as Read</button>
     </div>
 
     <script>
         var stompClient = null;
+        var typingTimeout = null;
+        var isCurrentlyTyping = false;
 
         function log(msg, className) {
             const div = document.createElement('div');
@@ -69,6 +75,13 @@
                     
                     if (data.type === 'READ_RECEIPT') {
                         log(`User ${data.readerId} read all messages`, "system");
+                    } else if (data.type === 'TYPING') {
+                        const typingDiv = document.getElementById('typing-indicator');
+                        if (data.isTyping) {
+                            typingDiv.innerText = `User ${data.userId} is typing...`;
+                        } else {
+                            typingDiv.innerText = '';
+                        }
                     } else {
                         log(`Received from ${data.senderId}: ${data.content}`, "received");
                     }
@@ -76,6 +89,54 @@
             }, function (error) {
                 log("Error: " + error, "system");
             });
+        }
+
+        function handleTyping() {
+            if (!stompClient || !stompClient.connected) return;
+
+            if (!isCurrentlyTyping) {
+                isCurrentlyTyping = true;
+                sendTypingEvent(true);
+            }
+
+            if (typingTimeout) clearTimeout(typingTimeout);
+            
+            typingTimeout = setTimeout(() => {
+                isCurrentlyTyping = false;
+                sendTypingEvent(false);
+            }, 2000);
+        }
+
+        function sendTypingEvent(isTyping) {
+            const convId = document.getElementById('convId').value;
+            const payload = {
+                conversationId: convId,
+                isTyping: isTyping
+            };
+            stompClient.send("/app/chat.typing", {}, JSON.stringify(payload));
+        }
+
+        function checkPresence() {
+            const username = document.getElementById('targetUsername').value;
+            const token = document.getElementById('token').value;
+            
+            if (!username || !token) {
+                alert("Username and Token required");
+                return;
+            }
+
+            fetch(`http://localhost:8080/api/presence/${username}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(res => res.json())
+            .then(data => {
+                let statusMsg = `${data.username} is ${data.status}`;
+                if (data.status === 'offline' && data.lastSeen) {
+                    statusMsg += ` (Last seen: ${new Date(parseInt(data.lastSeen)).toLocaleString()})`;
+                }
+                log(statusMsg, "system");
+            })
+            .catch(err => log("Presence error: " + err, "system"));
         }
 
         function sendMessage() {

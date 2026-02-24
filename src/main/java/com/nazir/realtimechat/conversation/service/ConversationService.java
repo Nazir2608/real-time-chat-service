@@ -62,7 +62,7 @@ public class ConversationService {
     @Transactional(readOnly = true)
     public List<ConversationResponse> getUserConversations(UUID userId) {
         log.info("Fetching conversations for user: {}", userId);
-        List<ConversationMember> memberships = conversationMemberRepository.findByUserId(userId);
+        List<ConversationMember> memberships = conversationMemberRepository.findByUserIdSorted(userId);
         log.info("Found {} memberships for user {}", memberships.size(), userId);
         
         return memberships.stream()
@@ -98,6 +98,7 @@ public class ConversationService {
                 .id(conversation.getId())
                 .type(conversation.getType())
                 .createdAt(conversation.getCreatedAt())
+                .lastMessageAt(conversation.getLastMessageAt())
                 .otherParticipant(otherUser)
                 .build();
     }

@@ -55,6 +55,11 @@ public class MessageService {
         message.setStatus(Message.MessageStatus.SENT);
 
         Message savedMessage = messageRepository.save(message);
+        
+        // 4. Update conversation last message timestamp
+        conversation.setLastMessageAt(savedMessage.getCreatedAt());
+        conversationRepository.save(conversation);
+        
         log.info("Message {} saved successfully in conversation {}", savedMessage.getId(), conversation.getId());
 
         return mapToResponse(savedMessage);

@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -28,6 +29,9 @@ public class Conversation extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ConversationType type = ConversationType.DIRECT;
+
+    @Column(name = "last_message_at")
+    private Instant lastMessageAt;
 
     public enum ConversationType {
         DIRECT, GROUP

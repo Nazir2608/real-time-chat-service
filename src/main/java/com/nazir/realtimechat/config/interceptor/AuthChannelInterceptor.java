@@ -30,31 +30,36 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
-        if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
-            log.info("WebSocket CONNECT command detected. Checking headers...");
-            String authHeader = accessor.getFirstNativeHeader(SecurityConstants.AUTHORIZATION_HEADER);
-            log.info("Authorization Header: {}", authHeader != null ? "Found" : "Missing");
+        if (accessor != null) {
+            if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                log.info("WebSocket CONNECT command detected. Checking headers...");
+                String authHeader = accessor.getFirstNativeHeader(SecurityConstants.AUTHORIZATION_HEADER);
+                log.info("Authorization Header: {}", authHeader != null ? "Found" : "Missing");
 
-            if (StringUtils.hasText(authHeader) && authHeader.startsWith(SecurityConstants.BEARER_PREFIX)) {
-                String token = authHeader.substring(SecurityConstants.BEARER_PREFIX.length());
-                if (jwtUtil.isTokenValid(token)) {
-                    String username = jwtUtil.extractSubject(token);
-                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                    UsernamePasswordAuthenticationToken authentication = 
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    
-                    accessor.setUser(authentication);
-                    log.info("WebSocket connection authenticated for user: {}", username);
-                    
-                    // Mark user as online
-                    presenceService.markOnline(username);
+                if (StringUtils.hasText(authHeader) && authHeader.startsWith(SecurityConstants.BEARER_PREFIX)) {
+                    String token = authHeader.substring(SecurityConstants.BEARER_PREFIX.length());
+                    if (jwtUtil.isTokenValid(token)) {
+                        String username = jwtUtil.extractSubject(token);
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                        UsernamePasswordAuthenticationToken authentication = 
+                                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                        
+                        accessor.setUser(authentication);
+                        log.info("WebSocket connection authenticated for user: {}", username);
+                        
+                        // Mark user as online
+                        presenceService.markOnline(username);
+                    } else {
+                        log.error("Invalid JWT token for WebSocket connection");
+                        throw new IllegalArgumentException("Invalid token");
+                    }
                 } else {
-                    log.error("Invalid JWT token for WebSocket connection");
-                    throw new IllegalArgumentException("Invalid token");
+                    log.error("Missing or invalid Authorization header for WebSocket connection");
+                    throw new IllegalArgumentException("Missing token");
                 }
-            } else {
-                log.error("Missing or invalid Authorization header for WebSocket connection");
-                throw new IllegalArgumentException("Missing token");
+            } else if (accessor.getUser() != null) {
+                // Refresh presence for any other command from an authenticated user
+                presenceService.markOnline(accessor.getUser().getName());
             }
         }
 

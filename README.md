@@ -1,144 +1,120 @@
-# Real-Time Chat Service 🚀
+# Real-Time Chat Service 
 
-A high-performance, production-ready real-time chat backend built with **Java 21**, **Spring Boot 3.4**, and **Stateless JWT Authentication**.
+A high-performance, production-ready real-time chat system built with **Java 21**, **Spring Boot 3.2**, and **Stateless JWT Authentication**. This project provides a robust foundation for 1-to-1 real-time communication with features like message persistence, presence tracking, and typing indicators.
 
-## 🛠 Tech Stack
+##  System Design & Architecture
 
-- **Framework**: Spring Boot 3.4
-- **Language**: Java 21
-- **Database**: MySQL 8.0 (Persistence)
-- **Cache**: Redis (JWT/Session management)
-- **Security**: Spring Security + JWT (HS256)
-- **Monitoring**: Prometheus + Grafana
-- **Containerization**: Docker + Docker Compose
+The system follows a modern micro-monolith architecture designed for scalability and real-time responsiveness.
 
----
+### High-Level Flow
+1.  **Authentication**: Users authenticate via JWT. The `SecurityConfig` ensures all REST and WebSocket connections are authorized.
+2.  **Discovery**: Users can search for other registered users to initiate conversations.
+3.  **Conversation Layer**: 1-to-1 conversations are unique pairs. If a conversation already exists between two users, the system retrieves the existing one.
+4.  **Real-Time Engine**: Powered by **Spring WebSocket + STOMP**. 
+    - **Messages**: Sent via `/app/chat.send` and broadcasted to `/topic/conversation.{id}`.
+    - **Presence**: Tracked in **Redis** via `AuthChannelInterceptor`. Users are marked online/offline based on WebSocket connectivity and activity.
+    - **Typing Indicators**: Lightweight events sent via `/app/chat.typing` to provide a "live" feel.
+5.  **Data Persistence**: 
+    - **MySQL**: Stores Users, Conversations, and Messages.
+    - **Redis**: Stores real-time presence status for millisecond-latency lookups.
 
-## 🔐 Authentication Module
-
-Stateless authentication using Access and Refresh tokens.
-
-### 1. Register User
-`POST /api/auth/register`
-```json
-{
-  "username": "user1",
-  "email": "user1@example.com",
-  "password": "password123"
-}
-```
-
-### 2. Login
-`POST /api/auth/login`
-```json
-{
-  "usernameOrEmail": "user1",
-  "password": "password123"
-}
-```
-**Returns**:
-```json
-{
-  "success": true,
-  "data": {
-    "accessToken": "eyJhbG...",
-    "refreshToken": "eyJhbG..."
-  },
-  "message": "Login successful"
-}
+### Architecture Diagram (Conceptual)
+```mermaid
+graph TD
+    Client[React Frontend] <-->|WS/STOMP| Server[Spring Boot App]
+    Client <-->|REST/JSON| Server
+    Server <-->|JPA/SQL| MySQL[(MySQL DB)]
+    Server <-->|Jedis/Lettuce| Redis[(Redis Cache)]
+    Server -->|JWT| Security[Spring Security]
 ```
 
 ---
 
-## 💬 Conversation Module (Phase 3)
+##  Tech Stack
 
-Manage direct conversations between users.
-
-### 1. Create/Get Direct Conversation
-`POST /api/conversations`
-- **Auth Required**: Yes
-- **Body**:
-```json
-{
-  "targetUserId": "ea0198aa-dd40-4107-a139-7b581c48ddd6"
-}
-```
-*Note: If a conversation already exists between the two users, it returns the existing one.*
-
-### 2. List User Conversations
-`GET /api/conversations`
-- **Auth Required**: Yes
-- **Returns**: A list of all conversations the authenticated user is part of.
+-   **Backend**: Spring Boot 3.2, Java 21, Spring Security, Spring Data JPA
+-   **Real-Time**: Spring WebSocket, STOMP, SockJS
+-   **Database**: MySQL 8.0
+-   **Caching**: Redis (Presence Tracking & JWT)
+-   **Frontend**: React, TypeScript, Tailwind CSS, Vite, Axios, StompJS
 
 ---
 
-## ✉️ Message Module (Phase 4 & 5)
+##  Key Features
 
-Reliable message persistence and **Real-Time Delivery via WebSockets**.
-
-### 1. Send Message (REST)
-`POST /api/messages`
-- **Auth Required**: Yes
-- **Body**:
-```json
-{
-  "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-  "content": "Hello, how are you?"
-}
-```
-
-### 2. Fetch Messages (Pagination)
-`GET /api/messages?conversationId=xxx&before=timestamp&limit=20`
-- **Auth Required**: Yes
-
-### 3. Real-Time WebSocket (Phase 5)
-- **Endpoint**: `/ws` (supports SockJS fallback)
-- **Handshake Auth**: Required. Pass JWT in `Authorization` header during STOMP `CONNECT`.
-- **Subscribe to Conversation**:
-  - `SUBSCRIBE /topic/conversation.{conversationId}`
-- **Send Message via WebSocket**:
-  - `SEND /app/chat.send`
-  - Body: `{ "conversationId": "...", "content": "..." }`
+-    **1-to-1 Real-Time Messaging**: Instant message delivery via WebSockets.
+-    **User Search**: Find users by username to start new conversations.
+-    **Presence System**: Real-time Online/Offline status indicators.
+-    **Typing Indicators**: See when the other person is typing.
+-    **Message History**: Persistent chat history with cursor-based pagination.
+-    **Read Receipts**: Visual confirmation when messages are read.
+-    **Automatic Reconnection**: Robust WebSocket connection management.
 
 ---
 
-## ⚙️ Configuration
+##  Core Modules
 
-The application can be configured via environment variables (see `docker-compose.yml` for defaults):
+### 1. Authentication (`/api/auth`)
+-   `POST /register`: Create a new account.
+-   `POST /login`: Authenticate and receive a JWT.
+-   `GET /me`: Get current authenticated user details.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_URL` | MySQL Connection URL | `jdbc:mysql://chat-mysql:3306/chatdb` |
-| `DB_USERNAME` | MySQL Username | `root` |
-| `DB_PASSWORD` | MySQL Password | `root` |
-| `REDIS_HOST` | Redis Hostname | `chat-redis` |
-| `JWT_SECRET` | 32+ char secret key | `dev-secret-please-change-in-prod-0123456789012345` |
+### 2. Conversations (`/api/conversations`)
+-   `GET /`: List all active conversations for the user, sorted by the latest activity.
+-   `POST /`: Create or retrieve a 1-to-1 conversation using `targetUserId`.
+
+### 3. Messages (`/api/messages`)
+-   `GET /`: Fetch paginated message history for a specific conversation.
+-   `POST /`: Send a message via REST (alternative to WebSocket).
+
+### 4. Presence (`/api/presence`)
+-   `GET /`: Get a map of online/offline statuses for all users.
 
 ---
 
-## 🐳 Docker Deployment
+##  Docker Deployment
 
-The easiest way to run the entire stack (App, MySQL, Redis, Monitoring) is using Docker Compose.
+The entire system (Backend, Database, Cache, Monitoring) can be started using Docker Compose.
 
-### Build and Start
+### Quick Start with Docker
 ```bash
-docker compose up -d --build
+# 1. Build and start all services
+docker-compose up -d --build
+
+# 2. Check logs
+docker-compose logs -f chat-app
 ```
 
-### View Logs
+### Services & Port Mappings
+- **Chat API**: [http://localhost:8080](http://localhost:8080)
+- **MySQL**: `localhost:3307` (Internal `3306`)
+- **Redis**: `localhost:6379`
+- **Prometheus**: [http://localhost:9090](http://localhost:9090)
+- **Grafana**: [http://localhost:3000](http://localhost:3000) (User: `admin`, Pass: `admin`)
+
+---
+
+## 🛠 Installation & Setup
+
+### Prerequisites
+-   Java 21
+-   MySQL 8.0 (Running on port 3307 or update `application.yml`)
+-   Redis (Running on port 6379)
+
+### Running the Backend
 ```bash
-docker logs real-time-chat-service -f
+mvn clean install
+mvn spring-boot:run
 ```
 
-### Stop Services
+### Running the Frontend
 ```bash
-docker compose down
+cd chat-frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## 📊 Monitoring
-
-- **Prometheus**: `http://localhost:9090`
-- **Grafana**: `http://localhost:3000` (Default login: `admin/admin`)
-- **Health Check**: `http://localhost:8080/actuator/health`
+##  License
+This project is licensed under the MIT License.
