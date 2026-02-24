@@ -8,6 +8,7 @@ import com.nazir.realtimechat.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import java.security.Principal;
+import java.util.UUID;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -29,23 +30,59 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat.send")
     public void handleMessage(Principal principal, @Payload MessageRequest request) {
-        log.info("WebSocket message received from {} for conversation {}", principal.getName(), request.getConversationId());
+        log.info("WebSocket message received from {} for conversation {}", 
+                principal.getName(), request.getConversationId());
 
         try {
             // 1. Find the current user
             User currentUser = userRepository.findByUsername(principal.getName()).orElseThrow(() -> new RuntimeException("User not found"));
 
-            // 2. Save the message using the existing service logic
-            MessageResponse savedMessage = messageService.sendMessage(currentUser.getId(), request);
+            // 2. Save message via service
+            MessageResponse response = messageService.sendMessage(currentUser.getId(), request);
 
-            // 3. Broadcast the saved message to the specific conversation topic
-            String destination = "/topic/conversation." + request.getConversationId();
-            log.info("Broadcasting message {} to {}", savedMessage.getId(), destination);
-            
-            messagingTemplate.convertAndSend(destination, savedMessage);
+            // 3. Broadcast to the conversation topic
+            String topic = "/topic/conversation." + request.getConversationId();
+            messagingTemplate.convertAndSend(topic, response);
+            log.info("Message broadcasted to topic: {}", topic);
 
         } catch (Exception e) {
-            log.error("Error handling WebSocket message: {}", e.getMessage(), e);
+            log.error("Failed to process WebSocket message: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Handles read receipts.
+     * Destination: /app/chat.read
+     */
+    @MessageMapping("/chat.read")
+    public void handleReadReceipt(Principal principal, @Payload UUID conversationId) {
+        log.info("Read receipt received from {} for conversation {}", principal.getName(), conversationId);
+        
+        try {
+            User currentUser = userRepository.findByUsername(principal.getName()).orElseThrow(() -> new RuntimeException("User not found"));
+
+            // 1. Mark as read in DB
+            messageService.markAsRead(currentUser.getId(), conversationId);
+
+            // 2. Broadcast read event to the topic
+            String topic = "/topic/conversation." + conversationId;
+            messagingTemplate.convertAndSend(topic, new ReadReceipt(conversationId, currentUser.getId()));
+            log.info("Read receipt broadcasted to topic: {}", topic);
+
+        } catch (Exception e) {
+            log.error("Failed to process read receipt: {}", e.getMessage());
+        }
+    }
+
+    @lombok.Data
+    public static class ReadReceipt {
+        private UUID conversationId;
+        private UUID readerId;
+        private String type = "READ_RECEIPT";
+
+        public ReadReceipt(UUID conversationId, UUID readerId) {
+            this.conversationId = conversationId;
+            this.readerId = readerId;
         }
     }
 }

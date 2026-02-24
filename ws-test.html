@@ -25,6 +25,7 @@
         <hr>
         <input type="text" id="message" placeholder="Type a message..." />
         <button onclick="sendMessage()">2. Send Message</button>
+        <button onclick="sendReadReceipt()" style="background: #e1f5fe;">3. Mark as Read</button>
     </div>
 
     <script>
@@ -50,7 +51,6 @@
 
             log("Attempting to connect...", "system");
             
-            // Use SockJS for fallback support
             const socket = new SockJS('http://localhost:8080/ws');
             stompClient = Stomp.over(socket);
 
@@ -65,8 +65,13 @@
                 log("Subscribing to " + topic, "system");
                 
                 stompClient.subscribe(topic, function (response) {
-                    const msg = JSON.parse(response.body);
-                    log(`Received from ${msg.senderId}: ${msg.content}`, "received");
+                    const data = JSON.parse(response.body);
+                    
+                    if (data.type === 'READ_RECEIPT') {
+                        log(`User ${data.readerId} read all messages`, "system");
+                    } else {
+                        log(`Received from ${data.senderId}: ${data.content}`, "received");
+                    }
                 });
             }, function (error) {
                 log("Error: " + error, "system");
@@ -90,6 +95,18 @@
             log(`Sending: ${content}`, "sent");
             stompClient.send("/app/chat.send", {}, JSON.stringify(payload));
             document.getElementById('message').value = '';
+        }
+
+        function sendReadReceipt() {
+            const convId = document.getElementById('convId').value;
+
+            if (!stompClient || !stompClient.connected) {
+                alert("Not connected!");
+                return;
+            }
+
+            log(`Sending Read Receipt for conversation ${convId}`, "system");
+            stompClient.send("/app/chat.read", {}, JSON.stringify(convId));
         }
     </script>
 </body>

@@ -37,19 +37,16 @@ public class MessageService {
     @Transactional
     public MessageResponse sendMessage(UUID senderId, MessageRequest request) {
         log.info("User {} sending message to conversation {}", senderId, request.getConversationId());
-
         // 1. Verify user is a member of the conversation
         if (!conversationMemberRepository.existsByConversationIdAndUserId(request.getConversationId(), senderId)) {
             log.warn("User {} attempted to send message to conversation {} without membership", senderId, request.getConversationId());
             throw new UnauthorizedException("You are not a member of this conversation");
         }
-
         // 2. Get conversation and sender
         Conversation conversation = conversationRepository.findById(request.getConversationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
         // 3. Create and save message
         Message message = new Message();
         message.setConversation(conversation);
@@ -66,13 +63,11 @@ public class MessageService {
     @Transactional(readOnly = true)
     public List<MessageResponse> getMessages(UUID userId, UUID conversationId, Instant before, int limit) {
         log.info("User {} fetching {} messages for conversation {} before {}", userId, limit, conversationId, before);
-
         // 1. Verify user is a member of the conversation
         if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
             log.warn("User {} attempted to fetch messages for conversation {} without membership", userId, conversationId);
             throw new UnauthorizedException("You are not a member of this conversation");
         }
-
         // 2. Fetch messages using cursor-based pagination
         Pageable pageable = PageRequest.of(0, limit);
         List<Message> messages = messageRepository.findMessagesBefore(conversationId, before, pageable);
@@ -81,6 +76,18 @@ public class MessageService {
         return messages.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void markAsRead(UUID userId, UUID conversationId) {
+        log.info("User {} marking messages as READ in conversation {}", userId, conversationId);
+        // 1. Verify membership
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
+            throw new UnauthorizedException("You are not a member of this conversation");
+        }
+        // 2. Update status
+        int updatedCount = messageRepository.markMessagesAsRead(conversationId, userId, Message.MessageStatus.READ);
+        log.info("Marked {} messages as READ for user {} in conversation {}", updatedCount, userId, conversationId);
     }
 
     private MessageResponse mapToResponse(Message message) {
