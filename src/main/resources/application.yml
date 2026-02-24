@@ -1,0 +1,53 @@
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  application:
+    name: real-time-chat-service
+  datasource:
+    url: jdbc:mysql://localhost:3307/realtimechat?createDatabaseIfNotExist=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC
+    username: root
+    password: MySql@123
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.time_zone: UTC
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+security:
+  jwt:
+    secret: dev-secret-please-change-in-prod-0123456789012345
+    access-token-expiration-minutes: 15
+    refresh-token-expiration-days: 7
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  jpa:
+    show-sql: false
+  datasource:
+    url: jdbc:mysql://mysql:3306/realtimechat?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: MySql@123
+  data:
+    redis:
+      host: redis
+      port: 6379
